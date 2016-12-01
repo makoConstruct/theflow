@@ -1,0 +1,20 @@
+[package]
+name = "theflow"
+version = "0.1.0"
+authors = ["mako <marcus.yass@gmail.com>"]
+
+[dependencies]
+iron = "0.4.0"
+router = ">=0.4.0, <2.0.0"
+persistent = ">=0.2.1, <2.0.0"
+mount = ">=0.2.1, <2.0.0"
+staticfile = ">=0.3.1, <2.0.0"
+serde = ">=0.8.17, <2.0.0"
+serde_json = ">=0.8.3, <2.0.0"
+serde_derive = ">=0.8.17, <2.0.0"
+maud = { version = "0.13.0", features = ["iron"] }
+maud_macros = "0.13.0"
+cask = "0.4.0"
+
+[dependencies.bodyparser]
+git = "https://github.com/iron/body-parser.git"
