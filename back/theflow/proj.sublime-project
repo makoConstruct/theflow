@@ -1,0 +1,13 @@
+{
+	"folders":[
+		{"path":"./"},
+	],
+	"build_systems":[
+		{
+			"name": "cargo build",
+			"working_dir": "$project_path",
+			"shell_cmd": "cargo build",
+			"file_regex": "^.*--> (.*\\.rs):([0-9]+):([0-9]+)"
+		}
+	]
+}

@@ -17,6 +17,25 @@ export function zip<A,B,C>(a:A[],b:B[], f:(A,B)=>C):C[]{
 	return ret
 }
 
+export function setLocalstorageObject(key, value){
+	if(localStorage){
+		localStorage.setItem(key, JSON.stringify(value))
+	}
+}
+
+export function getLocalstorageObject(key, defaultValue = undefined){
+	if(localStorage){
+		var value = localStorage.getItem(key)
+		if(value !== undefined){
+			return JSON.parse(value)
+		}else{
+			return defaultValue
+		}
+	}else{
+		return defaultValue
+	}
+}
+
 // function joining<T>(arr:T[], on:(T)=>void, off:()=>void){
 // 	if(arr.length == 0) return
 // 	var i=0
@@ -26,6 +45,10 @@ export function zip<A,B,C>(a:A[],b:B[], f:(A,B)=>C):C[]{
 // 		if(i < arr.length){ off() }
 // 	}
 // }
+
+export function timeoutSet(timeMilliseconds:number, cb:()=>void):number { //this is a more ergonomic way of ordering the params, and a fully accomodating type signature for setTimeout basically doesn't check shit, because all the params have to be optional or any
+	return setTimeout(cb, timeMilliseconds)
+}
 
 export function awaitRequest(httpType:string, address:string, data, contentType?:string):Promise<any>{
 	return new Promise((g,b)=> {
@@ -87,11 +110,11 @@ export function removeArrayItem(ar:any[], i:number){ //if i == -1, does nothing
 
 export function outerHeight(el){ //including margin
 	var cstyle = getComputedStyle(el)
-	return el.offsetHeight + parseFloat(cstyle.marginLeft) + parseFloat(cstyle.marginRight)
+	return el.offsetHeight + parseFloat(cstyle.marginTop) + parseFloat(cstyle.marginBottom)
 }
 export function outerWidth(el){ //including margin
 	var cstyle = getComputedStyle(el)
-	return el.offsetWidth + parseFloat(cstyle.marginTop) + parseFloat(cstyle.marginBottom)
+	return el.offsetWidth + parseFloat(cstyle.marginLeft) + parseFloat(cstyle.marginRight)
 }
 export function outerTop(el){
 	var cstyle = getComputedStyle(el)
@@ -100,6 +123,50 @@ export function outerTop(el){
 export function outerLeft(el){
 	var cstyle = getComputedStyle(el)
 	return el.offsetLeft - parseFloat(cstyle.marginLeft)
+}
+
+export class VerticallyCollapsingContainer {
+	child:HTMLElement;
+	currentTimeout:number = 0
+	isCollapsed = true
+	constructor(
+		public parent:HTMLElement,
+		public fadeDurationSeconds:number,
+		public collapseDurationSeconds:number
+	){ //starts out collapsed
+		parent.style.position = 'relative'
+		parent.style.height = '0px'
+		parent.style.transition = 'height '+collapseDurationSeconds+'s ease-in-out'
+		parent.style.overflow = 'hidden'
+		this.child = <HTMLElement>parent.firstElementChild;
+		this.child.style.position = 'absolute'
+		this.child.style.top = '0px'
+		this.child.style.left = '0px'
+		this.child.style.right = '0px'
+		this.child.style.opacity = '0'
+		this.child.style.transition = 'opacity '+fadeDurationSeconds+'s ease-in-out'
+	}
+	expand(){
+		if(!this.isCollapsed) return
+		this.isCollapsed = false
+		if(this.currentTimeout) clearTimeout(this.currentTimeout)
+		this.parent.style.height = outerHeight(this.child)+'px'
+		this.currentTimeout = timeoutSet(this.collapseDurationSeconds*1000, ()=>{
+			this.currentTimeout = 0
+			this.child.style.opacity = '1'
+		})
+	}
+	collapse(){
+		if(this.isCollapsed) return
+		this.isCollapsed = true
+		if(this.currentTimeout) clearTimeout(this.currentTimeout)
+		this.child.style.opacity = '0'
+		this.currentTimeout = timeoutSet(this.fadeDurationSeconds*1000, ()=>{
+			this.currentTimeout = 0
+			this.parent.style.height = '0px'
+		})
+	}
+	toggle(){  if(this.isCollapsed){ this.expand() }else{ this.collapse() }  }
 }
 
 

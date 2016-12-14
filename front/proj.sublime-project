@@ -1,0 +1,13 @@
+{
+	"folders":[
+		{"path":"./"},
+	],
+	"build_systems":[
+		{
+			"name": "gulp build",
+			"working_dir": "$project_path",
+			"shell_cmd": "gulp",
+			"file_regex": "^(.*)\\(([0-9]+),([0-9]+)\\): (.*)$"
+		}
+	]
+}

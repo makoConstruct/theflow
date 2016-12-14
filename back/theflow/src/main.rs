@@ -13,7 +13,6 @@ extern crate staticfile;
 extern crate bodyparser;
 extern crate serde;
 extern crate serde_json;
-//TODO: this app will be complete shit until you replace cask. Cask doesn't have transactions.
 extern crate cask;
 
 use std::fmt;
@@ -112,8 +111,7 @@ fn generate_index(config:&str)-> maud::Markup {
             head {
                 title "flow"
                 link rel="shortcut icon" href="assets/minimalfavicon.png"
-                link href="https://fonts.googleapis.com/css?family=Economica:400" rel="stylesheet" type="text/css"
-                link href="https://fonts.googleapis.com/css?family=Roboto:400" rel="stylesheet" type="text/css"
+                link href="https://fonts.googleapis.com/css?family=PT+Sans|Economica:400" rel="stylesheet"
                 script type="text/javascript" {
                     "var config = " (PreEscaped(config)) ";"
                 }
@@ -123,55 +121,73 @@ fn generate_index(config:&str)-> maud::Markup {
             }
             body {
                 audio id="focusSound" class="defsOnly" src="assets/shimshamer.ogg" preload="auto" {}
-                audio id="breakSound" class="defsOnly" src="assets/shimshamer.ogg" preload="auto" {}
-                div id="mainContent" {
-                    div id="clockArea" {
-                        div id="clockLine" {
-                            div id="clockFace" {
-                                canvas id="clockCanvas" width="90" height="90" {}
-                            }
-                            div id="clockText" {}
+                audio id="breakSound" class="defsOnly" src="assets/buddhist_bell.mp3" preload="auto" {}
+
+                div id="clockArea" {
+                    div id="clockLine" {
+                        div id="clockFace" {
+                            canvas id="clockCanvas" width="70" height="70" {}
                         }
-                        div id="statusLine" class="rowHeading" {
-                            "We are "
-                            u span id="currentStatus" "focusing on the task"
-                        }
+                        div id="clockText" {}
                     }
-                    div id="configurationArea" {
-                        span { "settings" }
-                        div id="setIntervalsInfo" class="infoLine" {
-                            div class="intervalInput" {
-                                "working"
+                    div id="statusLine" class="rowHeading" {
+                        "We are "
+                        span id="currentStatus" "focusing on the task"
+                    }
+                }
+                div id="configurationArea" {
+                    div id="settingsBtn" class="collapsingHeading" { span class="bulletPointThing" {} "settings" }
+                    div id="settingsInfo" class="infoLine settingContent scaleContainer" {
+                        div class="scaleContained" {
+                            div class="settingItemPair" {
+                                span { "working" }
                                 input id="intervalOnTime" {}
                             }
-                            div class="intervalInput" {
-                                "resting"
+                            div class="settingItemPair" {
+                                span { "resting" }
                                 input id="intervalOffTime" {}
                             }
-                            button id="sendIntervalsBtn" { "set intervals" }
+                            button id="sendIntervalsBtn" { "►set" }
+                            button id="resetBtn" { "reset" }
+                            div class="settingItemPair" {
+                                button id="themeBtn" { "theme" } span id="currentTheme" { "dark" }
+                            }
+                            div class="settingItemPair" {
+                                button id="soundBtn" { "sound" } span id="currentSound" { "on" }
+                            }
+                            div class="settingItemPair" {
+                                button id="notificationsBtn" { "notifications" } span id="currentNotifications" { "off" }
+                            }
                         }
-                        div { span id="resetBtn" class="action rowHeading" { "reset" } }
-                        div id="shareInfo" class="infoLine" {
-                            span id="shareBtn" class="action rowHeading" { "share" }
+                    }
+                    div id="shareBtn" class="collapsingHeading" { span class="bulletPointThing" {} "share" }
+                    div id="shareInfo" class="infoLine settingContent scaleContainer" {
+                        div class="scaleContained" {
                             input id="shareLinkDisplay" readOnly="true" class="linkDisplay" {}
                         }
-                        div id="aboutInfo" {
-                            span { "about" }
-                            p { "This is a pomodoro timer. The pomodoro method is a productivity technique. There is a cycle of work, and rest. During the work period you focus completely on the task you've committed yourself to, no distractions, not till the end. During the rest period, you step back, reflect, and think through what you're going to do in the next cycle." }
-                            p { "People who work from home may find it beneficial to share a pomodoro timer with some of their friends, as it imbues the cycle with a sense of collective will. If everyone you're with is working, you're going to feel like working too. If everyone breaks at the same times, you will have people to talk to during your break." }
-                            p { "Flow is a gift from " a href="http://aboutmako.makopool.com/" { "mako" } "." }
+                    }
+                    div id="aboutBtn" class="collapsingHeading" { span class="bulletPointThing" {} "about" }
+                    div id="aboutInfo" class="settingContent scaleContainer" {
+                        div class="scaleContained" {
+                            p { "This is a pomodoro timer. It may improve concentration" }
+                            p { "During the work period, commit to avoiding or deferring all distractions and focus completely on the task." }
+                            p { "During the rest period, step back, reflect, plan, and unwind. Handle some of the things that might have distracted you before." }
+                            p { "If you work from home, sharing a timer with friends may be helpful. When everyone in the group is working, you will feel like working too. When the group rests at the same time, you will have people to talk to during your break." }
+                            p { "More info about the pomodoro method can be found " a href="https://en.wikipedia.org/wiki/Pomodoro_Technique" { "here" } }
+                            p { "Flow is a gift from " a href="http://aboutmako.makopool.com/" { "mako" } }
                         }
                     }
                 }
-                a href="http://aboutmako.makopool.com/" id="makersMark" {
-                    div class="makerstext" "about" {}
-                    svg class="defsOnly" xmlns="http://www.w3.org/2000/svg" width="512" height="512" {
-                        path id="aboutLogo" d="m256 0-95.7 95.7 256 256L512 256 256 0zM95.7 160.3 0 256l256 256 95.7-95.7-256-256z" /
-                    }
-                    svg id="minimalIconView" viewBox="0 0 512 512" {
-                        use xlink:href="#aboutLogo" /
-                    }
-                }
+
+                // a href="http://aboutmako.makopool.com/" id="makersMark" {
+                //     div class="makerstext" "about" {}
+                //     svg class="defsOnly" xmlns="http://www.w3.org/2000/svg" width="512" height="512" {
+                //         path id="aboutLogo" d="m256 0-95.7 95.7 256 256L512 256 256 0zM95.7 160.3 0 256l256 256 95.7-95.7-256-256z" /
+                //     }
+                //     svg id="minimalIconView" viewBox="0 0 512 512" {
+                //         use xlink:href="#aboutLogo" /
+                //     }
+                // }
             }
         }
     }

@@ -1,8 +1,8 @@
 
-import {afterDOMContentLoaded, zip, awaitRequest, postObjectGetObject, postDataGetObject, fetchObject} from './shiver'
+import {afterDOMContentLoaded, zip, awaitRequest, postObjectGetObject, postDataGetObject, fetchObject, VerticallyCollapsingContainer, getLocalstorageObject, setLocalstorageObject} from './shiver'
 
-import Toasts from './toasts'
-var toasts = new Toasts({defaults:{color:'#161616'}})
+import {Toasts} from './toasts'
+var toasts = new Toasts()
 
 //configuration
 declare var config:{startingDate:number, onTime:number, offTime:number, lightMode:boolean} //startingDate will be null if the config is new
@@ -10,10 +10,9 @@ declare var config:{startingDate:number, onTime:number, offTime:number, lightMod
 
 //constants
 var apiUrl = '/q/q'
-var siteUrl = 'http://localhost:3200/'
-var clockLineThickness = 3
-var innerCircleLineThickness = 12
-var clockGaps = 8
+var clockLineThickness = 9
+var innerCircleLineThickness = 9
+var clockGaps = 9
 
 
 //utilities
@@ -55,7 +54,7 @@ function selectElementContents(el:HTMLElement){
 class ModeTransitioner{
 	public currentMode:string
 	constructor(
-		public modes:Map<string, any>, //the objs want an entry lambda, optional exit lambda
+		public modes:Map<string, any>, //the objs can have an enter lambda, am exit lambda, and transition lambdas
 		initialMode:string
 	){
 		this.currentMode = initialMode
@@ -64,11 +63,15 @@ class ModeTransitioner{
 		if(nm == this.currentMode) return
 		if(this.currentMode && this.modes.get(this.currentMode).exit){
 			this.modes.get(this.currentMode).exit()
-			logi('exited ' + this.currentMode)
+		}
+		var enteredMode = this.modes.get(nm)
+		if(enteredMode.enter) enteredMode.enter()
+		if(enteredMode.enterFrom){
+			if(enteredMode.enterFrom[this.currentMode]){
+				enteredMode.enterFrom[this.currentMode]()
+			}
 		}
 		this.currentMode = nm
-		this.modes.get(nm).entry()
-		logi('entered '+nm)
 	}
 }
 
@@ -79,6 +82,7 @@ var unlerp = (a:number, b:number, p:number)=> (p-a)/(b-a)
 var sq = (n:number)=> n*n
 var easeIn = (n:number)=> non(sq(non(n)))
 var easeOut = (n:number)=> sq(sq(n))
+var lightMode:boolean
 var progressOverInterval = (startTime, transitionDuration)=> (Date.now() - startTime)/transitionDuration
 
 // class TransitioningColor{
@@ -116,18 +120,18 @@ var progressOverInterval = (startTime, transitionDuration)=> (Date.now() - start
 
 
 //
-var backgroundColor = ()=> config.lightMode ? '#ffffff' : '#000000'
-var backgroundColorWithAlpha = (a)=> config.lightMode ?
+var backgroundColor = ()=> lightMode ? '#ffffff' : '#000000'
+var backgroundColorWithAlpha = (a)=> lightMode ?
 	'rgba(255,255,255,'+a+')' :
 	'rgba(0,0,0,'+a+')'
-var arcColor = ()=> config.lightMode ? '#000' : '#e9e9e9'
-var dimColor = ()=> config.lightMode ? '#CDCDCD' : '#1a1a1a'
-var litColor = ()=> config.lightMode ? '#CDCDCD' : '#1a1a1a'
+var arcColor = ()=> lightMode ? '#000' : '#e9e9e9'
+var dimColor = ()=> lightMode ? '#CDCDCD' : '#1a1a1a'
+var litColor = ()=> lightMode ? '#CDCDCD' : '#1a1a1a'
 var circleColor = ()=> {
 	return dimColor()
 }
 
-var urlFor = (key)=> siteUrl+key
+var urlFor = (key)=> 'http://'+document.location.hostname+'/'+key
 
 var pageKey = ()=>{
 	var pn = window.location.pathname.substring(1)
@@ -135,13 +139,22 @@ var pageKey = ()=>{
 }
 var isShared = ()=> !!pageKey()
 
+function errorToast(msg:string){
+	toasts.post(msg, {withClass:'no'})
+}
+function lastingErrorToast(msg:string){
+	toasts.post(msg, {withClass:'no', lifespan:Infinity})
+}
+function toastNormally(msg:string){
+	toasts.post(msg, {withClass:'alrightToast'})
+}
 
 
 function configurationChanged(){
 	if(isShared()){
 		objectQuery({op:'edit', key:pageKey(), config:config}).then(
-			()=>{toasts.post("changes saved")},
-			(err)=>{toasts.post("error: "+err, {color:'#742929', lifespan:Infinity})} )
+			()=>{toastNormally("changes saved")},
+			(err)=>{lastingErrorToast("error: "+err)} )
 	}
 }
 
@@ -168,6 +181,11 @@ afterDOMContentLoaded(()=> {
 		configurationChanged()
 	}
 	
+	//fetch settings from localstorage
+	lightMode = getLocalstorageObject('dayMode', config.lightMode)
+	var soundOn:boolean = getLocalstorageObject('soundEnabled', true)
+	var userWantsNotifications:boolean = getLocalstorageObject('notificationsEnabled')
+	
 	//current rendering state
 	var animations:Array<()=>boolean> = [] //if animation returns false, wont be called again
 	var secondsIn:number
@@ -178,20 +196,68 @@ afterDOMContentLoaded(()=> {
 	var ticking //the intervalID
 	
 	//set up Notifications
-	var hasNotifications:boolean = false
-	if(Notification){
-		Notification.requestPermission().then((result)=>{
-			if(result == 'denied'){
-			}else if(result == 'default'){
+	function updateNotificationSetting(ns:boolean){
+		var currentNotificationSettingDisplay = getEl('currentNotifications')
+		currentNotificationSettingDisplay.textContent = ns ? 'on' : 'off'
+		userWantsNotifications = ns
+		setLocalstorageObject('notificationsEnabled', userWantsNotifications)
+		if(ns){
+			if(Notification){
+				if(Notification.permission == 'default'){
+					Notification.requestPermission().then((result)=>{
+						if(result == 'denied'){
+							userWantsNotifications = false
+						}else if(result == 'default'){
+							userWantsNotifications = true
+						}else{
+							userWantsNotifications = true
+						}
+						setLocalstorageObject('notificationsEnabled', userWantsNotifications)
+					})
+				}else if(Notification.permission == 'denied'){
+					errorToast("You must have told the web browser to forbid me from using notifications. I can't enable them. You will have to speak with it for me and sort things out.")
+				}
 			}else{
-				hasNotifications = true
+				errorToast("Your web browser does not support notifications. Maybe you should install a better web browser. How about chrome?")
 			}
-		})
+		}
 	}
+	updateNotificationSetting(userWantsNotifications)
+	var notificationsBtn = getEl('notificationsBtn')
+	notificationsBtn.addEventListener('click', ()=>{
+		updateNotificationSetting(!userWantsNotifications)
+	})
 	
-	var soundOn:boolean = false
+	//set up sound setting
+	function updateSoundSetting(ns:boolean){
+		soundOn = ns
+		setLocalstorageObject('soundEnabled', soundOn)
+		getEl('currentSound').textContent = ns ? 'on' : 'off'
+	}
+	updateSoundSetting(soundOn)
+	getEl('soundBtn').addEventListener('click', ()=>{
+		updateSoundSetting(!soundOn)
+	})
+	
+	//set up theme setting
+	function updateThemeSetting(ns:boolean){
+		lightMode = ns
+		setLocalstorageObject('dayMode', lightMode)
+		getEl('currentTheme').textContent = lightMode ? 'light' : 'dark'
+		if(lightMode){
+			document.body.classList.add('lightTheme')
+		}else{
+			document.body.classList.remove('lightTheme')
+		}
+	}
+	updateThemeSetting(lightMode)
+	getEl('themeBtn').addEventListener('click', ()=>{
+		updateThemeSetting(!lightMode)
+	})
+	
+	
 	function notify(msg, sound){
-		if(hasNotifications){
+		if(Notification && userWantsNotifications){
 			new Notification(msg, {icon:'arc.svg'})
 		}else{
 			console.log('notification: '+msg+' B)')
@@ -274,7 +340,10 @@ afterDOMContentLoaded(()=> {
 			}
 		}],
 		['focused', {
-			entry: ()=>{
+			exit: ()=>{
+				addAnimation(easeArcDown(Date.now()))
+			},
+			enter: ()=>{
 				currentTimeRange = config.onTime
 				currentStatus.textContent = 'focusing on the task'
 				var timeOfExit = Date.now()
@@ -282,16 +351,20 @@ afterDOMContentLoaded(()=> {
 					centerCirclep = non(clampUnit(progressOverInterval(timeOfExit, 90)))
 					return centerCirclep > 0
 				})
-				// if(!userIsPresent()){ //this is no good. If the user uses a window manager, and the timer is visible in a workspace, even if that workspace isn't currently active, userIsPresent() will be, and no alert will ever sound.
-				notify('now focus', focusSound)
-				// }
 			},
-			exit: ()=>{
-				addAnimation(easeArcDown(Date.now()))
+			enterFrom: {
+				'break': ()=>{
+					// if(!userIsPresent()){ //this is no good. If the user uses a window manager, and the timer is visible in a workspace, even if that workspace isn't currently active, userIsPresent() will be, and no alert will ever sound.
+					notify('now focus', focusSound)
+					// }
+				}
 			}
 		}],
 		['break', {
-			entry: ()=>{
+			exit: ()=>{
+				addAnimation(easeArcDown(Date.now()))
+			},
+			enter: ()=>{
 				currentTimeRange = config.offTime
 				currentStatus.textContent = 'taking a break'
 				var timeOfEntry = Date.now()
@@ -299,12 +372,11 @@ afterDOMContentLoaded(()=> {
 					centerCirclep = clampUnit(progressOverInterval(timeOfEntry, 90))
 					return centerCirclep < 1
 				})
-				if(!userIsPresent()){
+			},
+			enterFrom: {
+				'focused': ()=>{
 					notify('step back. take a break', breakSound)
 				}
-			},
-			exit: ()=>{
-				addAnimation(easeArcDown(Date.now()))
 			}
 		}]
 	]
@@ -322,21 +394,52 @@ afterDOMContentLoaded(()=> {
 		
 		var timeToGo = currentTimeRange - secondsIn
 		var minutesToGo = Math.floor(timeToGo/60)
-		clockText.textContent = leftPad(2, '0', ''+(minutesToGo%60))+":"+leftPad(2, '0', ''+(timeToGo%60))
+		clockText.textContent = leftPad(2, '0', ''+(minutesToGo))+":"+leftPad(2, '0', ''+(timeToGo%60))
 		startRendering()
+	}
+	
+	var openCount = 0
+	function collapsionFor(v:HTMLElement):any {
+		var ret = new VerticallyCollapsingContainer(v, 0.1, 0.1)
+		var o = {
+			isCollapsed: true,
+			collapse: ()=>{
+				if(openCount > 0){ --openCount }
+				ret.collapse()
+				o.isCollapsed = true
+				if(openCount == 0){ getEl('configurationArea').classList.remove('active') }
+			},
+			expand: ()=>{
+				if(openCount == 0){
+					getEl('configurationArea').classList.add('active')
+				}
+				o.isCollapsed = false
+				++openCount
+				ret.expand()
+			},
+			toggle: ()=>{
+				if(o.isCollapsed){
+					o.expand()
+				}else{
+					o.collapse()
+				}
+			}
+		}
+		return o
 	}
 	
 	var shareBtn = getEl('shareBtn') as HTMLElement
 	var shareInfo = getEl('shareInfo') as HTMLElement
+	var shareInfoCollapsion = collapsionFor(shareInfo)
 	var shareLinkDisplay = getEl('shareLinkDisplay') as HTMLInputElement
 	shareBtn.addEventListener('click', ()=>{
-		if(shareInfo.classList.contains('showingSubcontent')){
-			shareInfo.classList.remove('showingSubcontent')
+		if(!shareInfoCollapsion.isCollapsed){
+			shareInfoCollapsion.collapse()
 		}else{
 			//trigger share if needed
 			var displayLink = (key)=>{
 				shareLinkDisplay.value = urlFor(key)
-				shareInfo.classList.add('showingSubcontent')
+				shareInfoCollapsion.expand()
 				shareLinkDisplay.select()
 			}
 			if(isShared()){
@@ -345,7 +448,7 @@ afterDOMContentLoaded(()=> {
 				objectQuery({op:'create', config:config}).then(
 					(o)=> {
 						displayLink(o)
-						toasts.post("configuration has been saved")
+						toastNormally("configuration has been saved")
 						history.pushState({op:'got_named'}, 'timer '+o, o)
 					},
 					loge
@@ -360,11 +463,12 @@ afterDOMContentLoaded(()=> {
 		ticking = setInterval(tick, 1000)
 	}
 	
-	var setIntervalsInfo = getEl('setIntervalsInfo') as HTMLElement
-	var setIntervalsAction = getEl('setIntervalsAction') as HTMLElement
+	var settingsInfo = getEl('settingsInfo') as HTMLElement
+	var settingsBtn = getEl('settingsBtn') as HTMLElement
 	var intervalOnTime = getEl('intervalOnTime') as HTMLInputElement
 	var intervalOffTime = getEl('intervalOffTime') as HTMLInputElement
 	var sendIntervalsBtn = getEl('sendIntervalsBtn') as HTMLElement
+	var settingsInfoCollapsion = collapsionFor(settingsInfo)
 	function transmitNewIntervals(){
 		//for either mode, we figure out how far we are through the current interval of that mode and make us proportionately far through in the new settings
 		if(intervalOnTime.classList.contains('no') || intervalOnTime.classList.contains('no')) return
@@ -387,6 +491,9 @@ afterDOMContentLoaded(()=> {
 		config.offTime = newOffTime
 		configurationChanged()
 	}
+	
+	settingsBtn.addEventListener('click', ()=>{ settingsInfoCollapsion.toggle() })
+	
 	sendIntervalsBtn.addEventListener('click', transmitNewIntervals)
 	var prepToTakeMinutes = (htmlel)=>{
 		htmlel.addEventListener('input', ()=>{
@@ -403,6 +510,12 @@ afterDOMContentLoaded(()=> {
 	
 	intervalOnTime.value = ''+(config.onTime/60)
 	intervalOffTime.value = ''+(config.offTime/60)
+	
+	
+	
+	var aboutAction = getEl('aboutBtn')
+	var aboutInfoCollapsion = collapsionFor(getEl('aboutInfo'))
+	aboutAction.addEventListener('click', ()=>{ aboutInfoCollapsion.toggle() })
 	
 	
 	var resetBtn = getEl('resetBtn')
